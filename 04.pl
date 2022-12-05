@@ -36,50 +36,33 @@ range(A, B, C, D) --> number(A), "-", number(B), ",", number(C), "-", number(D),
 ranges([]) --> "\n".
 ranges([r(A, B, C, D)|Rs]) --> range(A, B, C, D), ranges(Rs).
 
-include_ranges([], []).
-include_ranges([R|Rs], O) :-
-  include_ranges(Rs, Os),
-  (
-    include_range(R),
-    O = [R|Os],
-    !;
-    O = Os
-  ).
-    
 between(A, B, C) :-
   A >= B,
   A =< C.
 
-include_range(r(A, B, C, D)) :-
+include_range(r(A, B, C, D), true) :-
   between(A, C, D),
   between(B, C, D).
-include_range(r(A, B, C, D)) :-
+include_range(r(A, B, C, D), true) :-
   between(C, A, B),
   between(D, A, B).
+include_range(X, false) :-
+  \+include_range(X, true).
 
-overlap_ranges([], []).
-overlap_ranges([R|Rs], O) :-
-  overlap_ranges(Rs, Os),
-  (
-    overlap_range(R),
-    O = [R|Os],
-    !;
-    O = Os
-  ).
-
-overlap_range(r(A, B, C, D)) :-
+overlap_range(r(A, _, C, D), true) :-
   between(A, C, D).
-overlap_range(r(A, B, C, D)) :-
+overlap_range(r(_, B, C, D), true) :-
   between(B, C, D).
-overlap_range(r(A, B, C, D)) :-
+overlap_range(r(A, B, C, _), true) :-
   between(C, A, B).
-overlap_range(r(A, B, C, D)) :-
+overlap_range(r(A, B, _, D), true) :-
   between(D, A, B).
+overlap_range(X, false) :-
+  \+overlap_range(X, true).
 
 solution(part1(Sol1), part2(Sol2)) :-
   phrase_from_file(ranges(R), '04.input'),
-  include_ranges(R, O),
+  tfilter(include_range, R, O),
   length(O, Sol1),
-  overlap_ranges(R, O2),
+  tfilter(overlap_range, R, O2),
   length(O2, Sol2).
-
