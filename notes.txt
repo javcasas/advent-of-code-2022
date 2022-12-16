@@ -1,0 +1,8 @@
+I had to invent:
+* sortBy
+
+I had to use lots of assertz to implement bitmaps and bitmap-like structures
+
+I had to do quite a bit of chained if_ conditionals
+
+I had to invent gt/lt for if_ conditionals
