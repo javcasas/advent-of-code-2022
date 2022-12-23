@@ -44,33 +44,40 @@ total_flow_released_([opened_valve(_, F)|OV], TotalFlow) :-
 total_flow_released(state(_, _, _, OV), F) :- total_flow_released_(OV, F).
 
 
-%max_potential_extra_flow_(30, _, 0).
-%max_potential_extra_flow_(X, _, 0).
+max_potential_extra_flow_(T, _, 0) :- T >= 30.
+max_potential_extra_flow_(_, [], 0).
+max_potential_extra_flow_(T, [closed_valve(_, F)|CVs], EF) :-
+  ExtraFlow is (30 - T) * F,
+  T1 is T + 2,
+  max_potential_extra_flow_(T1, CVs, EF1),
+  EF is EF1 + ExtraFlow,
+  !.
 
-%max_potential_extra_flow(state(T, _, CV, _), EF) :- max_potential_extra_flow_(T, CV, EF).
+max_potential_extra_flow(state(T, _, CV, _), EF) :- max_potential_extra_flow_(T, CV, EF).
 
 %step(Valves, Position, Action, NewPosition).
-step(state(Time, Position, [], OpenedValves), done, state(30, Position, [], OpenedValves)).
-step(state(Time, Position, ClosedValves, OpenedValves), open(Position), state(Time1, Position, ClosedValves1, OpenedValves1)) :-
-  select(closed_valve(Position), ClosedValves, ClosedValves1),
-  valve(Position, Flow, _),
-  Flow > 0,
+step(_, state(_, Position, [], OpenedValves), done, state(30, Position, [], OpenedValves)).
+step(_, state(Time, Position, ClosedValves, OpenedValves), open(Position), state(Time1, Position, ClosedValves1, OpenedValves1)) :-
+  select(closed_valve(Position, Flow), ClosedValves, ClosedValves1),
   OpenedValves1 = [opened_valve(Position, TotalFlowReleased)|OpenedValves],
   TotalFlowReleased is (30 - Time) * Flow,
   Time1 is Time + 1.
 
-step(state(Time, Position, ClosedValves, OpenedValves), move_to(Destination), state(Time1, Destination, ClosedValves, OpenedValves)) :-
-  valve(Position, _, Destinations),
-  select(Destination, Destinations, _),
+step(Paths, state(Time, Position, ClosedValves, OpenedValves), move_to(Destination), state(Time1, Destination, ClosedValves, OpenedValves)) :-
+  select(path(Position, Options), Paths, _),
+  select(Destination, Options, _),
   Time1 is Time + 1.
 
 %steps(Start, InitialState, Actions, FinalState)
-steps_(InitialState, [], InitialState) :- InitialState = state(30, _, _, _).
-steps_(InitialState, [Action|Actions], FinalState) :-
+steps_(_, _, InitialState, [], InitialState) :- InitialState = state(30, _, _, _).
+steps_(best_solution(S, BestScore), Paths, InitialState, [Action|Actions], FinalState) :-
   InitialState = state(Time, _, _, _),
   Time < 30,
-  step(InitialState, Action, NextState),
-  steps_(NextState, Actions, FinalState).
+  step(Paths, InitialState, Action, NextState),
+  max_potential_extra_flow(NextState, MaxExtraScore),
+  total_flow_released(NextState, CurrentScore),
+  MaxExtraScore + CurrentScore > BestScore,
+  steps_(best_solution(S, BestScore), Paths, NextState, Actions, FinalState).
 
 openable_valve(closed_valve(P), T) :-
   valve(P, F, _),
@@ -80,22 +87,41 @@ openable_valve(closed_valve(P), T) :-
     T = true
   ).
 
-steps(Actions, FinalState) :-
-  InitialState = state(1, "AA", ClosedValves1, []),
-  findall(closed_valve(P), valve(P, _, _), ClosedValves),
-  tfilter(openable_valve, ClosedValves, ClosedValves1),
-  steps_(InitialState, Actions, FinalState).
+sort_closed_valves(CV, CV1) :-
+  findall(cv(F, P), select(closed_valve(P, F), CV, _), CV2),
+  sort(CV2, CV3), reverse(CV3, CV4),
+  findall(closed_valve(P, F), select(cv(F, P), CV4, _), CV1).
 
-:- dynamic(valve/3).
-fillvalves_([]).
-fillvalves_([X|Xs]) :-
-  assertz(X),
-  fillvalves_(Xs).
-fillvalves(X) :-
-  retractall(valve(_, _, _)),
-  fillvalves_(X).
+steps1(BestScore, Paths, InitialState, Actions, FinalState) :-
+  steps_(best_solution([done], BestScore), Paths, InitialState, Actions1, FinalState1),
+  (
+    (
+      Actions = Actions1,
+      FinalState = FinalState1
+    );
+    (
+      total_flow_released(FinalState1, BestScore1),
+      steps1(BestScore1, Paths, InitialState, Actions2, FinalState2),
+      Actions = Actions2,
+      FinalState = FinalState2
+    )
+  ).
+
+steps(Valves, Actions, FinalState) :-
+  findall(
+    closed_valve(P, F),
+    (select(valve(P, F, _), Valves, _), F > 0),
+    ClosedValves1
+  ),
+  sort_closed_valves(ClosedValves1, ClosedValves),
+  findall(
+    path(P, Ps),
+    (select(valve(P, _, Ps), Valves, _)),
+    Paths
+  ),
+  InitialState = state(1, "AA", ClosedValves, []),
+  steps1(612, Paths, InitialState, Actions, FinalState).
 
 solution1(A, F) :-
   phrase_from_file(lines(X), '16.sample.input'),
-  fillvalves(X),
-  steps(A, F).
+  steps(X, A, F).
