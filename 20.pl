@@ -7,6 +7,7 @@
 :- use_module(library(between)).
 :- use_module(library(files)).
 
+% File parser
 digit('0') --> "0".
 digit('1') --> "1".
 digit('2') --> "2".
@@ -26,6 +27,9 @@ file_entry(e(X)) --> digits(X), "\n".
 file_entries([]) --> "\n".
 file_entries([X|Xs]) --> file_entry(X), file_entries(Xs).
 
+% Zipper operations
+% A list zipper is a list optimized for selecting (o(N)) and updating elements (o(1)) efficiently
+% zipper(ReversedHead, CurrentElement, Tail) represents a list like [reverse ReversedHead | [CurrentElement] | Tail]
 list_to_zipper([X|Xs], zipper([], X, Xs)).
 
 move_view(zipper(P, X, [Xs1|Xs]), right, zipper([X|P], Xs1, Xs)).
@@ -51,7 +55,9 @@ move_view(Z, right(X), Z1) :-
   move_view(Z2, right(X1), Z1).
 
 replace_item(zipper(A, _, C), B1, zipper(A, B1, C)).
+
 get_item(zipper(_, I, _), I).
+
 drag_item(zipper(A, B, [C|C1]), right, zipper([C|A], B, C1)).
 drag_item(zipper(A, B, []), right, Z) :-
   reverse(A, AR),
@@ -64,7 +70,6 @@ drag_item(zipper([], B, C), left, Z) :-
   reverse(C, CR),
   Z1 = zipper(CR, B, []),
   drag_item(Z1, left, Z).
-
 drag_item(Z, left(0), Z).
 drag_item(Z, left(X), Z1) :-
   X > 0,
@@ -88,6 +93,10 @@ at_end(zipper(_, _, [_|_]), false).
 zipper_to_list(zipper(P, X, Xs), L) :-
   reverse(P, P1),
   append([P1, [X], Xs], L).
+
+% Solution for part 1
+% Encrypted (unprocessed) items are marked as e(Element)
+% Decrypted (processed) items are marked as d(Element)
 
 process(Z, Z) :- at_end(Z, true), get_item(Z, d(_)), !.
 process(Z, Z1) :-
@@ -131,9 +140,9 @@ solution1(Sol1) :-
   get_item(Z5, d(I3000)),
   Sol1 is I1000 + I2000 + I3000.
 
+% Testsuite for the zipper operations
 assert(Name, X, X) :- !, write(Name), write(' '), write('PASS'), nl.
 assert(Name, X, Y) :- X \= Y, !, write(Name), write(' '), write('FAIL'), write(' '), write(X), write(' '), write(Y), nl.
-
 
 test :-
   list_to_zipper([1, 2, -3, 3, -2, 0, 4], Z1),
@@ -185,6 +194,9 @@ test :-
 runtests :-
   findall(_, test, _).
 
+% Part 2 solution
+% First we preprocess all the elements converting them to e(Position, Value)
+% so that then we can search for the element with position P incrementally, moving it around
 add_position(MaxIndex, [], [], MaxIndex).
 add_position(P, [e(V)|Es], [e(P, V1)|Es1], MaxIndex) :-
   P1 is P + 1,
@@ -194,15 +206,16 @@ add_position(X, X1, MaxIndex) :- add_position(0, X, X1, MaxIndex).
 
 find_element_by_index(Index, Z, Z) :-
   get_item(Z, e(Index, _)).
-
 find_element_by_index(Index, Z, Z1) :-
   \+ get_item(Z, e(Index, _)),
   at_end(Z, false),
   move_view(Z, right, Z2),
   find_element_by_index(Index, Z2, Z1).
 
+% For each index, search for the element in the list and move it to the new position
 process2(Index, MaxIndex, Z, Z) :- Index >= MaxIndex.
 process2(Index, MaxIndex, Z, Z1) :-
+  % Quick log process
   ((0 #= Index mod 200) -> (write(p(Index, MaxIndex)), nl); true),
   Index < MaxIndex,
   go_to_start(Z, Z2),
@@ -226,6 +239,7 @@ find_zero2(Z, Z1) :-
   find_zero_2(Z2, Z1).
 
 process2_ten_times(10, _, Z, Z).
+% Stuff to store and retrieve progress, allowing stopping and restarting the program
 process2_ten_times(X, MaxIndex, Z, Z1) :-
   write(process(X)), nl,
   open("20.progress", write, FD), write(FD, progress(X, MaxIndex, Z)), write(FD, '.'), close(FD),
