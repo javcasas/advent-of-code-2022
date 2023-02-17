@@ -47,40 +47,45 @@ move_view(Z, left(X), Z1) :-
   X > 0,
   X1 is X - 1,
   move_view(Z, left, Z2),
+  !,
   move_view(Z2, left(X1), Z1).
 move_view(Z, right(X), Z1) :-
   X > 0,
   X1 is X - 1,
   move_view(Z, right, Z2),
+  !,
   move_view(Z2, right(X1), Z1).
 
 replace_item(zipper(A, _, C), B1, zipper(A, B1, C)).
 
 get_item(zipper(_, I, _), I).
 
-drag_item(zipper(A, B, [C|C1]), right, zipper([C|A], B, C1)).
-drag_item(zipper(A, B, []), right, Z) :-
+drag_item1(zipper(A, B, [C|C1]), right, zipper([C|A], B, C1)).
+drag_item1(zipper(A, B, []), right, Z) :-
   reverse(A, AR),
   Z1 = zipper([], B, AR),
-  drag_item(Z1, right, Z).
-drag_item(zipper([A], B, C), left, zipper(CR, B, [])) :-
+  drag_item1(Z1, right, Z).
+drag_item1(zipper([A], B, C), left, zipper(CR, B, [])) :-
   reverse([A|C], CR), !.
-drag_item(zipper([A|As], B, C), left, zipper(As, B, [A|C])) :- !.
-drag_item(zipper([], B, C), left, Z) :-
+drag_item1(zipper([A|As], B, C), left, zipper(As, B, [A|C])) :- !.
+drag_item1(zipper([], B, C), left, Z) :-
   reverse(C, CR),
   Z1 = zipper(CR, B, []),
-  drag_item(Z1, left, Z).
+  drag_item1(Z1, left, Z).
+
 drag_item(Z, left(0), Z).
 drag_item(Z, left(X), Z1) :-
   X > 0,
+  !,
   X1 is X - 1,
-  drag_item(Z, left, Z2),
+  drag_item1(Z, left, Z2),
   drag_item(Z2, left(X1), Z1).
 drag_item(Z, right(0), Z).
 drag_item(Z, right(X), Z1) :-
   X > 0,
+  !,
   X1 is X - 1,
-  drag_item(Z, right, Z2),
+  drag_item1(Z, right, Z2),
   drag_item(Z2, right(X1), Z1).
 
 go_to_start(Z, Z1) :-
@@ -205,12 +210,16 @@ add_position(P, [e(V)|Es], [e(P, V1)|Es1], MaxIndex) :-
 add_position(X, X1, MaxIndex) :- add_position(0, X, X1, MaxIndex).
 
 find_element_by_index(Index, Z, Z) :-
-  get_item(Z, e(Index, _)).
+  get_item(Z, e(Index, _)),
+  !.
 find_element_by_index(Index, Z, Z1) :-
   \+ get_item(Z, e(Index, _)),
   at_end(Z, false),
   move_view(Z, right, Z2),
-  find_element_by_index(Index, Z2, Z1).
+  find_element_by_index(Index, Z2, Z1),
+  !.
+
+:- dynamic(restart_value/1).
 
 % For each index, search for the element in the list and move it to the new position
 process2(Index, MaxIndex, Z, Z) :- Index >= MaxIndex.
@@ -226,9 +235,16 @@ process2(Index, MaxIndex, Z, Z1) :-
     (Value >= 0, Direction = right(Steps));
     (Value < 0, Direction = left(Steps))
   ),
+  !,
   drag_item(Z3, Direction, Z4),
   Index1 is Index + 1,
   !,
+  retractall(restart_value(_)),
+  assertz(restart_value(r(Index1, MaxIndex, Z4, Z1))),
+  fail,
+  process2(Index1, MaxIndex, Z4, Z1).
+process2(_, _, _, _) :-
+  restart_value(r(Index1, MaxIndex, Z4, Z1)),
   process2(Index1, MaxIndex, Z4, Z1).
 
 find_zero_2(Z, Z) :- get_item(Z, e(_, 0)).
